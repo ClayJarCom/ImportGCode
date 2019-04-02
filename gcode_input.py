@@ -679,5 +679,4 @@ if __name__ == '__main__':
      
     gc = ImportGCode(args[0], v_carve, laser_mode, ignore_z, label_z,
                      diameter, v_angle, v_top, v_step)
-    #gc.doc.write(r'C:\PaddleBR\CAM\Carbide\debug.svg')
     gc.doc.write(inkex.sys.stdout)
