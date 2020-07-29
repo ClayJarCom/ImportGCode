@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ImportGCode, and Inkscape extension by Nathaniel Klumb
 
@@ -13,8 +14,11 @@ the Free Software Foundation; either version 2 of the License, or
 """
 import re
 import inkex
-from StringIO import StringIO
-from math import sqrt,pi,sin,cos,tan,acos,atan2,fabs
+import sys
+import argparse
+from io import StringIO
+from math import sqrt ,pi, sin, cos, tan, acos, atan2, fabs
+from lxml import etree
 
 class ImportGCode:
     """ Import a GCode file and process it into an SVG. """
@@ -530,32 +534,32 @@ class ImportGCode:
                 ' width="{}mm" height="{}mm" viewBox="{} {} {} {}"/>'
                ).format(self.maxX-self.minX, self.maxY-self.minY,
                         self.minX, self.minY, self.maxX-self.minX, self.maxY-self.minY)
-        self.doc = inkex.etree.parse(StringIO((base)))
+        self.doc = etree.parse(StringIO((base)))
         svg = self.doc.getroot()
         # Since G-code and SVG interpret Y in opposite directions,
         # we just group everything under a transform that mirrors Y.
-        svg = inkex.etree.SubElement(svg,'g',{'id':'gcode',
+        svg = etree.SubElement(svg,'g',{'id':'gcode',
                                               'transform':'scale(1,-1)'})
         # Add illustrative axes to the SVG to facilitate positioning.
-        inkex.etree.SubElement(svg,'path',
+        etree.SubElement(svg,'path',
                                {'d':'M 0 {} V {}'.format(self.minY, self.maxY),
                                 'style':self.getStyle('#00ff00',0.5),
                                 'id':'vertical'})
-        inkex.etree.SubElement(svg,'path',
+        etree.SubElement(svg,'path',
                                {'d':'M {} 0 H {}'.format(self.minX, self.maxX),
                                 'style':self.getStyle('#ff0000',0.5),
                                 'id':'horizontal'})
         # For V-carves, include the paths and use a narrow stroke width.
         if self.v_carve:
             for path in self.paths:
-                inkex.etree.SubElement(svg,'path',
+                etree.SubElement(svg,'path',
                                        {'d':path,
                                         'style':self.getStyle(width=0.1),
                                         'id':'path{}'.format(self.next_id())})
         # For standard mode with Z ignored, include the paths.
         elif self.ignore_z:
             for path in self.paths:
-                inkex.etree.SubElement(svg,'path',
+                etree.SubElement(svg,'path',
                                        {'d':path,
                                         'style':self.getStyle(),
                                          'id':'path{}'.format(self.next_id())})
@@ -570,7 +574,7 @@ class ImportGCode:
                     params = {'id':('group{}-{}'
                                    ).format(self.next_id(),z_depths[i]),
                               'style':self.getStyle()}
-                    group = inkex.etree.SubElement(svg,'g',params)
+                    group = etree.SubElement(svg,'g',params)
                     
                     # If labels are enabled, add the label to the group.
                     if self.label_z:
@@ -585,7 +589,7 @@ class ImportGCode:
                           label = '{} mm'.format(z_depths[i])
                         else:
                           label = '{} in'.format(z_depths[i]/self.unit)
-                        inkex.etree.SubElement(group,'text',params
+                        etree.SubElement(group,'text',params
                                               ).text = label
                                      
                         depth_num += 1
@@ -593,13 +597,13 @@ class ImportGCode:
                     # Now add the paths to the group.
                     for path in self.paths_by_z[z_depths[i]]:
                         id = 'path{}'.format(self.next_id())
-                        inkex.etree.SubElement(group,'path',
+                        etree.SubElement(group,'path',
                                                {'d':path,
                                                 'style':self.getStyle(),
                                                 'id':id})
             # If labels are enabled, label the labels.
             if self.label_z:
-                inkex.etree.SubElement(svg,'text',
+                etree.SubElement(svg,'text',
                                        {'x':'{}'.format(self.maxX),
                                         'y':'{}'.format(depth_num*-5),
                                         'transform':'scale(1,-1)',
@@ -611,72 +615,56 @@ class ImportGCode:
 
 # And now for the code to allow Inkscape to run our lovely extension.                                      
 if __name__ == '__main__':
-    parser = inkex.optparse.OptionParser(usage=('usage: %prog [options]'
-                                                ' GCodeFile'),
-                                         option_class=inkex.InkOption)
-    # Mode select:
-    parser.add_option('-m', '--mode', action='store', 
-                      help='Mode: vcarve, standard, laser',
-                      default='standard')
-    # V-carve options:
-    parser.add_option('-a', '--v_angle', action='store',
-                      help='Included (full) angle for V-bit, in degrees.',
-                      default=None)
-    parser.add_option('-t', '--v_top', action='store',
-                      help='Stock top (usually zero)', default=None)
-    parser.add_option('-s', '--v_step', action='store',
-                      help='Step size for curve interpolation.', default=None)
-    # Standard options:
-    parser.add_option('-d', '--tool_diameter', action='store',
-                      help='Tool diameter / path width.', default=None)
-    # General options:
-    parser.add_option('-u', '--units', action='store',
-                      help='Dialog units.', default='mm')
-    parser.add_option('-z', '--z_axis', action='store',
-                      help='Z-axis: ignore,group,label', default=False)
-    # Non-options to handle .inx "parameters":
-    parser.add_option('--tab', action='store')
-    parser.add_option('--inputhelp', action='store')
-    
+    parser = argparse.ArgumentParser(description=('usage: %prog [options] GCodeFile'))
+    parser.add_argument('-m', '--mode', help='Mode: vcarve, standard, laser', default='standard')
+    parser.add_argument('-a', '--v_angle',  help='Included (full) angle for V-bit, in degrees.', default=None)
+    parser.add_argument('-t', '--v_top',  help='Stock top (usually zero)', default=None)
+    parser.add_argument('-s', '--v_step', help='Step size for curve interpolation.', default=None)
+    parser.add_argument('-d', '--tool_diameter', help='Tool diameter / path width.', default=None)
+    parser.add_argument('-u', '--units',  help='Dialog units.', default='mm')
+    parser.add_argument('-z', '--z_axis', help='Z-axis: ignore,group,label', default=False)
+    parser.add_argument('--tab')
+    parser.add_argument('--inputhelp')
+    parser.add_argument('inputfile')
+	 
     # Now, process, my lovelies!
-    (options, args) = parser.parse_args(inkex.sys.argv[1:])
+    args = parser.parse_args()
     
     # First steps first, what mode?
     v_carve = False
     ignore_z = False
     laser_mode = False
-    if (options.mode == 'vcarve'):
+    if (args.mode == 'vcarve'):
       v_carve = True
-    elif (options.mode == 'laser'):
+    elif (args.mode == 'laser'):
       laser_mode = True
     
     # V-carve parameters.    
     try:
-        v_angle = round(float(options.v_angle),3)
+        v_angle = round(float(args.v_angle),3)
     except ValueError:
         v_angle = 1.0
     try:
-        v_top = round(float(options.v_top) * 
-                      (25.4 if (options.units == 'in') else 1.0),5)
+        v_top = round(float(args.v_top) * 
+                      (25.4 if (args.units == 'in') else 1.0),5)
     except ValueError:
         v_top = 0.0
     try:
-        v_step = round(float(options.v_step) * 
-                       (25.4 if (options.units == 'in') else 1.0),5)
+        v_step = round(float(args.v_step) * 
+                       (25.4 if (args.units == 'in') else 1.0),5)
     except ValueError:
         v_step = 1.0
     
     # Standard parameters.    
     try:
-        diameter = round(float(options.tool_diameter) * 
-                         (25.4 if (options.units == 'in') else 1.0),3)
+        diameter = round(float(args.tool_diameter) * 
+                         (25.4 if (args.units == 'in') else 1.0),3)
     except ValueError:
         diameter = 1.0
     
-    # General options.
-    ignore_z = (options.z_axis == 'ignore')
-    label_z = (options.z_axis == 'label')
+    # General args.
+    ignore_z = (args.z_axis == 'ignore')
+    label_z = (args.z_axis == 'label')
      
-    gc = ImportGCode(args[0], v_carve, laser_mode, ignore_z, label_z,
-                     diameter, v_angle, v_top, v_step)
-    gc.doc.write(inkex.sys.stdout)
+    gc = ImportGCode(args.inputfile, v_carve, laser_mode, ignore_z, label_z, diameter, v_angle, v_top, v_step)
+    gc.doc.write(sys.stdout.buffer)
